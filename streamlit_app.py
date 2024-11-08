@@ -16,7 +16,7 @@ def upload_to_gemini(file, mime_type=None):
     return uploaded_file
 
 # Configuração da página do Streamlit
-st.title("Transcrição de Áudio com Google Gemini")
+st.title("Transcrição de Áudio do Will")
 st.write("Faça o upload do seu arquivo de áudio para transcrição.")
 
 # Carregamento do arquivo via Streamlit
