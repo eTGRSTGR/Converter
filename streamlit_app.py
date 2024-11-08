@@ -3,6 +3,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import streamlit as st
 import tempfile
+from io import BytesIO
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -11,9 +12,9 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Função para fazer o upload do arquivo para Gemini
-def upload_to_gemini(file_path, mime_type=None):
+def upload_to_gemini(file, mime_type=None):
     """Uploads the given file to Gemini."""
-    uploaded_file = genai.upload_file(file_path, mime_type=mime_type)
+    uploaded_file = genai.upload_file(file, mime_type=mime_type)
     return uploaded_file
 
 # Configuração da página do Streamlit
@@ -24,58 +25,55 @@ st.write("Faça o upload do seu arquivo de áudio para transcrição.")
 uploaded_file = st.file_uploader("Escolha um arquivo de áudio", type=["ogg", "mp3", "wav"])
 
 if uploaded_file is not None:
-    # Determina o tipo MIME do arquivo selecionado
-    mime_type = None
-    if uploaded_file.type == "audio/ogg":
-        mime_type = "audio/ogg"
-    elif uploaded_file.type == "audio/mpeg":
-        mime_type = "audio/mpeg"
-    elif uploaded_file.type == "audio/wav":
-        mime_type = "audio/wav"
+    try:
+        # Determina o tipo MIME do arquivo selecionado
+        mime_type = uploaded_file.type
 
-    # Salva o arquivo temporariamente
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.tmp') as temp_file:
-        temp_file.write(uploaded_file.read())
-        temp_file_path = temp_file.name
+        # Salva o arquivo temporariamente em memória como BytesIO
+        temp_file = BytesIO(uploaded_file.read())
 
-    # Faz o upload do arquivo usando a função
-    with st.spinner("Fazendo upload do arquivo e preparando a transcrição..."):
-        audio_file = upload_to_gemini(temp_file_path, mime_type=mime_type)
+        # Faz o upload do arquivo usando a função
+        with st.spinner("Fazendo upload do arquivo e preparando a transcrição..."):
+            audio_file = upload_to_gemini(temp_file, mime_type=mime_type)
 
-    # Cria uma sessão de chat para transcrever o áudio
-    generation_config = {
-        "temperature": 2,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 8192,
-        "response_mime_type": "text/plain",
-    }
+        # Cria uma sessão de chat para transcrever o áudio
+        generation_config = {
+            "temperature": 2,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 8192,
+            "response_mime_type": "text/plain",
+        }
 
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        generation_config=generation_config,
-    )
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            generation_config=generation_config,
+        )
 
-    chat_session = model.start_chat(
-        history=[
-            {
-                "role": "user",
-                "parts": [
-                    audio_file,
-                    "transcreva o áudio em texto",
-                ],
-            }
-        ]
-    )
+        chat_session = model.start_chat(
+            history=[
+                {
+                    "role": "user",
+                    "parts": [
+                        audio_file,
+                        "transcreva o áudio em texto",
+                    ],
+                }
+            ]
+        )
 
-    # Envia a mensagem para obter a transcrição
-    with st.spinner("Transcrevendo o áudio..."):
-        response = chat_session.send_message("transcreva o áudio")
+        # Envia a mensagem para obter a transcrição
+        with st.spinner("Transcrevendo o áudio..."):
+            response = chat_session.send_message("transcreva o áudio")
 
-    # Remove o arquivo temporário
-    os.remove(temp_file_path)
+        # Exibe a transcrição do áudio
+        st.success("Transcrição concluída!")
+        st.write("### Transcrição do Áudio:")
+        st.text(response.text)
 
-    # Exibe a transcrição do áudio
-    st.success("Transcrição concluída!")
-    st.write("### Transcrição do Áudio:")
-    st.text(response.text)
+    except Exception as e:
+        st.error("Ocorreu um erro durante o processamento do arquivo.")
+        st.write(f"Detalhes do erro: {str(e)}")
+
+else:
+    st.write("Por favor, faça o upload de um arquivo de áudio para continuar.")
