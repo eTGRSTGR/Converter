@@ -2,6 +2,7 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 import streamlit as st
+import tempfile
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -10,13 +11,13 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Função para fazer o upload do arquivo para Gemini
-def upload_to_gemini(file, mime_type=None):
+def upload_to_gemini(file_path, mime_type=None):
     """Uploads the given file to Gemini."""
-    uploaded_file = genai.upload_file(file, mime_type=mime_type)
+    uploaded_file = genai.upload_file(file_path, mime_type=mime_type)
     return uploaded_file
 
 # Configuração da página do Streamlit
-st.title("Transcrição de Áudio do Will")
+st.title("Transcrição de Áudio com Google Gemini")
 st.write("Faça o upload do seu arquivo de áudio para transcrição.")
 
 # Carregamento do arquivo via Streamlit
@@ -32,9 +33,14 @@ if uploaded_file is not None:
     elif uploaded_file.type == "audio/wav":
         mime_type = "audio/wav"
 
+    # Salva o arquivo temporariamente
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.tmp') as temp_file:
+        temp_file.write(uploaded_file.read())
+        temp_file_path = temp_file.name
+
     # Faz o upload do arquivo usando a função
     with st.spinner("Fazendo upload do arquivo e preparando a transcrição..."):
-        audio_file = upload_to_gemini(uploaded_file, mime_type=mime_type)
+        audio_file = upload_to_gemini(temp_file_path, mime_type=mime_type)
 
     # Cria uma sessão de chat para transcrever o áudio
     generation_config = {
@@ -65,6 +71,9 @@ if uploaded_file is not None:
     # Envia a mensagem para obter a transcrição
     with st.spinner("Transcrevendo o áudio..."):
         response = chat_session.send_message("transcreva o áudio")
+
+    # Remove o arquivo temporário
+    os.remove(temp_file_path)
 
     # Exibe a transcrição do áudio
     st.success("Transcrição concluída!")
